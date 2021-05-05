@@ -2,6 +2,9 @@
 #include "MQTTNetwork.h"
 #include "MQTTmbed.h"
 #include "MQTTClient.h"
+#include "stm32l475e_iot01_accelero.h"
+
+using namespace std::chrono;
 
 // GLOBAL VARIABLES
 WiFiInterface *wifi;
@@ -10,6 +13,7 @@ InterruptIn btn2(USER_BUTTON);
 volatile int message_num = 0;
 volatile int arrivedcount = 0;
 volatile bool closed = false;
+int16_t pDataXYZ[3];
 
 const char* topic = "Mbed";
 
@@ -32,7 +36,8 @@ void publish_message(MQTT::Client<MQTTNetwork, Countdown>* client) {
     message_num++;
     MQTT::Message message;
     char buff[100];
-    sprintf(buff, "QoS0 Hello, Python! #%d", message_num);
+    BSP_ACCELERO_AccGetXYZ(pDataXYZ);
+    sprintf(buff, "%d, %d, %d\n", pDataXYZ[0], pDataXYZ[1], pDataXYZ[2]);
     message.qos = MQTT::QOS0;
     message.retained = false;
     message.dup = false;
@@ -50,6 +55,8 @@ void close_mqtt() {
 
 int main() {
 
+
+        BSP_ACCELERO_Init();
     wifi = WiFiInterface::get_default_instance();
     if (!wifi) {
             printf("ERROR: No WiFiInterface found.\r\n");
@@ -98,7 +105,7 @@ int main() {
     }
 
     mqtt_thread.start(callback(&mqtt_queue, &EventQueue::dispatch_forever));
-    btn2.rise(mqtt_queue.event(&publish_message, &client));
+    mqtt_queue.call_every(500ms, publish_message, &client);
     //btn3.rise(&close_mqtt);
 
     int num = 0;
